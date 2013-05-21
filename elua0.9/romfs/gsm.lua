@@ -230,10 +230,10 @@ function find_pattern(text, pattern, start)
 end
 
 -- Main
-init({uart_id = 1, rts_pio = pio.PC_5, rst_pio = pio.PC_7})
-tmr.delay(0, 1000000)
-try_send_cmd(at_comm.at_7)
-try_get_sms()
+--init({uart_id = 1, rts_pio = pio.PC_5, rst_pio = pio.PC_7})
+--tmr.delay(0, 1000000)
+--try_send_cmd(at_comm.at_7)
+--try_get_sms()
 --try_send_cmd(at_comm.at_6)
 --send_sms('+552193923011', 'teste')
 
