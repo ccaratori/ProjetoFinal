@@ -2,13 +2,19 @@
 --[[ 
 	GSM library for Mikroeletronika GSM Click Board
 		
-	init(id, [baudrate], [at_wait])
+	Usage:
+	
+	- Initialize gsm module
+	init({uart_id, rts_pio, rst_pio, baud_rate, at_wait, buffer_size})
 		- uart_id			Serial/Uart channel
-		- rts_pio			Board PIO connected to GSM Click RTS pin (default=pio.PC_5)
-		- rst_pio			Board PIO connected to GSM Click RST pin (default=pio.PC_7)		
+		- rts_pio			Board PIO connected to GSM Click RTS pin
+		- rst_pio			Board PIO connected to GSM Click RST pin
 		- baud_rate 		Comm speed (default=9600)
 		- at_wait  			AT Command Timeout in Seconds (default=45)
 		- buffer_size		UART Buffer Size (default=1024)
+		
+	eg.: gsm.init({uart_id = 1, rts_pio = pio.PC_5, rst_pio = pio.PC_7, baud_rate 9600, at_wait = 45, buffer_size = 1024})
+	IMPORTANT: uart_id, rts_pio and rst_pio MUST be specified in init
 ]]--
 
 local uart = uart
@@ -42,16 +48,23 @@ function init(c)
 	
 	config = c
 	
-	if not config.baud_rate then 
-		config.baud_rate = 9600
+	if not config.uart_id then
+		-- TODO - log missing uart_id
+		return false
 	end
 	
 	if not config.rts_pio then
-		config.rts_pio = pio.PC_5
+		-- TODO - log missing rts_pio
+		return false
 	end
 	
 	if not config.rst_pio then
-		config.rst_pio = pio.PC_7
+		-- TODO - log missing rst_pio
+		return false
+	end
+	
+	if not config.baud_rate then 
+		config.baud_rate = 9600
 	end
 	
 	if not config.at_wait then
@@ -217,7 +230,7 @@ function find_pattern(text, pattern, start)
 end
 
 -- Main
-init({uart_id = 1})
+init({uart_id = 1, rts_pio = pio.PC_5, rst_pio = pio.PC_7})
 tmr.delay(0, 1000000)
 try_send_cmd(at_comm.at_7)
 try_get_sms()
