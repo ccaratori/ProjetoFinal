@@ -30,7 +30,7 @@ local at_comm = {
 		at_3 = 'AT+CMGS="',         	-- sends SMS to desired number
 		at_4 = 'AT+CMGR=1',         	-- Command for reading message from location 1 from inbox
 		at_5 = 'AT+CMGD=1,4',       	-- Erasing all messages from inbox
-		at_6 = 'AT+CMGL="REC READ"',   		-- Check status of received SMS
+		at_6 = 'AT+CMGL=',   			-- Check status of received SMS
 		at_7 = 'AT+CPIN?';				-- Check Sim Card status
 	}
 
@@ -104,6 +104,7 @@ function init(c)
 	try_send_cmd(at_comm.at_2)
 	
 	print("GSM initialized!")
+	return true
 end
 
 -- Print GSM configuration
@@ -199,16 +200,18 @@ function send_sms(phone_number, message)
 end
 
 -- Check unread text messages
-function try_get_sms()
+function try_get_sms(sms_status)
 	local messages = {}, m, n, s			-- m = message, n = number, s = status
-	send_at_command(at_comm.at_6)
+	if(sms_status == nil) then sms_status = '"ALL"' end
+	
+	send_at_command(at_comm.at_6..sms_status)
 	local response = get_response()
-	if((parse_response(response) ~= responses.GSM_OK) and (parse_response(response) ~= responses.GSM_ERROR) and (parse_response(response) ~= responses.CMS_ERROR)) then
+	while((parse_response(response) ~= responses.GSM_OK) and (parse_response(response) ~= responses.GSM_ERROR) and (parse_response(response) ~= responses.CMS_ERROR)) do
 		s = string.match(response, '(REC%s%w+)') 	-- First line of response
 		n = string.match(response, '(+%d+)')
 		m = get_response()							-- Second line of response
-		print(n..' '..m..' '..s)
-		if(parse_response(get_response()) == responses.GSM_OK) then 
+		response = get_response()					-- Third line of response
+		if(parse_response(response) == responses.GSM_OK) then 
 			table.insert(messages, {s, n, m})
 		end
 	end
