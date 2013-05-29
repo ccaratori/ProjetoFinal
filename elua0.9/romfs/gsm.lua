@@ -1,20 +1,50 @@
-
 --[[ 
-	GSM library for Mikroeletronika GSM Click Board
-		
-	Usage:
+	PUC-Rio, 2013
 	
-	- Initialize gsm module
-	init({uart_id, rts_pio, rst_pio, baud_rate, at_wait, buffer_size})
-		- uart_id			Serial/Uart channel
-		- rts_pio			Board PIO connected to GSM Click RTS pin
-		- rst_pio			Board PIO connected to GSM Click RST pin
-		- baud_rate 		Comm speed (default=9600)
-		- at_wait  			AT Command Timeout in Seconds (default=45)
-		- buffer_size		UART Buffer Size (default=1024)
+	* Author: 
+		Carlo Caratori (carlocaratori@gmail.com)
 		
-	eg.: gsm.init({uart_id = 1, rts_pio = pio.PC_5, rst_pio = pio.PC_7, baud_rate 9600, at_wait = 45, buffer_size = 1024})
-	IMPORTANT: uart_id, rts_pio and rst_pio MUST be specified in init
+	* Description: 
+		GSM library for Mikroeletronika GSM Click Board. Only basic SMS communication implemented
+		
+	* Related:
+		MikroEletronika GSM Click
+		http://www.mikroe.com/click/gsm/
+	
+		Telit GL865 Quad related documents (Hardware, Software and AT Commands)
+		http://www.telit.com/en/products.php?p_ac=show&p=110
+		
+	* Usage:
+		For SMS communication, only 3 simple functions are needed
+	
+		1) Initialize gsm module
+		init({uart_id, rts_pio, rst_pio, baud_rate, at_wait, buffer_size})
+			- uart_id			Serial/Uart channel
+			- rts_pio			Board PIO connected to GSM Click RTS pin
+			- rst_pio			Board PIO connected to GSM Click RST pin
+			- baud_rate 		Comm speed (default=9600)
+			- at_wait  			AT Command Timeout in Seconds (default=45)
+			- buffer_size		UART Buffer Size (default=1024)
+			
+		eg.: gsm.init({uart_id = 1, rts_pio = pio.PC_5, rst_pio = pio.PC_7, baud_rate 9600, at_wait = 45, buffer_size = 1024})
+		IMPORTANT: uart_id, rts_pio and rst_pio MUST be specified in init
+		
+		2) Send sms
+		send_sms(phone_number, message)
+			- phone_number		Phone number to send sms to
+			- message			Message to be sent
+			
+		eg.: gsm.send_sms('99999999', 'Hello from eLua')
+			
+		3) Check for received text messages
+		try_get_sms(status)
+			- status			Filters messages to be retreived (check sms_status for more detail)
+			RETURNS				Table with messages inside. Each message is a table itself {sts, num, msg) where:
+									sts - Message status (READ or UNREAD)
+									num - phone number that sent message
+									msg - message itself
+									
+		eg.: gsm.try_get_sms(sms_status.READ)	
 ]]--
 
 local uart = uart
@@ -34,7 +64,7 @@ local at_comm = {
 		at_7 = 'AT+CPIN?';				-- Check Sim Card status
 	}
 
--- Responses to parse
+-- Responses codes
 local responses = {
 		GSM_OK                       = 0,
 		GSM_Ready_To_Receive_Message = 1,
@@ -42,8 +72,15 @@ local responses = {
 		GSM_UNREAD                   = 3,
 		CMS_ERROR					 = 10;
 	}
+	
+-- Possible message status to be retreived
+sms_status = {
+		ALL		= 'ALL',			-- All messages	
+		READ	= 'REC READ',		-- Only read messages
+		UNREAD	= 'REC UNREAD';		-- Only unread messages
+	}
 
--- Initialize gsm connection 
+-- Initialize gsm board and communication
 function init(c)
 	
 	config = c
@@ -103,14 +140,7 @@ function init(c)
 	-- Set message type as TXT
 	try_send_cmd(at_comm.at_2)
 	
-	print("GSM initialized!")
 	return true
-end
-
--- Print GSM configuration
-function print_config()
-	print("Config: \n")
-	for i, v in pairs(config) do print(i, v) end
 end
 
 -- Negotiate the baudrate
@@ -147,6 +177,7 @@ function wait_response(rspn)
 	end
 end
 
+-- Get response from GSM Click
 function get_response()
 	while(true) do
 		local line = uart_recv_line()
@@ -158,13 +189,14 @@ function get_response()
 	end
 end
 
+-- Parse received response
 function parse_response(rspn)
 	local ret = -1
 	
-	if (rspn == 'OK') then ret = 0 end
-	if (rspn == '> ') then ret = 1 end
-	if (rspn == 'ERROR') then ret = 2 end
-	if (rspn:find('+CMS ERROR') ~= nil) then ret = 10 end
+	if (rspn == 'OK') then ret = responses.GSM_OK end
+	if (rspn == '> ') then ret = responses.GSM_Ready_To_Receive_Message end
+	if (rspn == 'ERROR') then ret = responses.GSM_ERROR end
+	if (rspn:find('+CMS ERROR') ~= nil) then ret = responses.CMS_ERROR end
 	
 	return ret
 end
@@ -190,7 +222,7 @@ end
 function send_sms(phone_number, message)
 	
 	-- Send phone number and wait for ACK
-	local at_string = at_comm.at_3..phone_number
+	local at_string = at_comm.at_3..phone_number..'"\r'
 	try_send_cmd(at_string, responses.GSM_Ready_To_Receive_Message)
 	
 	-- Send text message itself
@@ -199,6 +231,7 @@ function send_sms(phone_number, message)
 	
 end
 
+-- TODO Check more than 1 sms
 -- Check unread text messages
 function try_get_sms(sms_status)
 	local messages = {}, m, n, s			-- m = message, n = number, s = status
@@ -207,8 +240,8 @@ function try_get_sms(sms_status)
 	send_at_command(at_comm.at_6..sms_status)
 	local response = get_response()
 	while((parse_response(response) ~= responses.GSM_OK) and (parse_response(response) ~= responses.GSM_ERROR) and (parse_response(response) ~= responses.CMS_ERROR)) do
-		s = string.match(response, '(REC%s%w+)') 	-- First line of response
-		n = string.match(response, '(+%d+)')
+		s = string.match(response, 'REC%s(%w+)') 	-- First line of response
+		n = string.match(response, '"(+?%d+)"')
 		m = get_response()							-- Second line of response
 		response = get_response()					-- Third line of response
 		if(parse_response(response) == responses.GSM_OK) then 
@@ -231,12 +264,4 @@ end
 function find_pattern(text, pattern, start)
 	return string.sub(text, string.find(text, pattern, start))
 end
-
--- Main
---init({uart_id = 1, rts_pio = pio.PC_5, rst_pio = pio.PC_7})
---tmr.delay(0, 1000000)
---try_send_cmd(at_comm.at_7)
---try_get_sms()
---try_send_cmd(at_comm.at_6)
---send_sms('+552193923011', 'teste')
 
