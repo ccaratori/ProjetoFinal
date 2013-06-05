@@ -70,7 +70,8 @@ local responses = {
 		GSM_Ready_To_Receive_Message = 1,
 		GSM_ERROR                    = 2,
 		GSM_UNREAD                   = 3,
-		CMS_ERROR					 = 10;
+		CMS_ERROR					 = 4,
+		NO_RESPONSE					 = 5;
 	}
 	
 -- Possible message status to be retreived
@@ -79,6 +80,9 @@ sms_status = {
 		READ	= 'REC READ',		-- Only read messages
 		UNREAD	= 'REC UNREAD';		-- Only unread messages
 	}
+	
+-- Maximum tries for sending AT command
+MAX_TRIES = 5
 
 -- Initialize gsm board and communication
 function init(c)
@@ -86,17 +90,17 @@ function init(c)
 	config = c
 	
 	if not config.uart_id then
-		-- TODO - log missing uart_id
+		print('UART id must be set in init.\nEg.: init({uart_id = 1, rts_pio = pio.PC_5, rst_pio = pio.PC_7, baud_rate 9600, at_wait = 45, buffer_size = 1024})')
 		return false
 	end
 	
 	if not config.rts_pio then
-		-- TODO - log missing rts_pio
+		print('RTS must be set in init.\nEg.: init({uart_id = 1, rts_pio = pio.PC_5, rst_pio = pio.PC_7, baud_rate 9600, at_wait = 45, buffer_size = 1024})')
 		return false
 	end
 	
 	if not config.rst_pio then
-		-- TODO - log missing rst_pio
+		print('RST must be set in init.\nEg.: init({uart_id = 1, rts_pio = pio.PC_5, rst_pio = pio.PC_7, baud_rate 9600, at_wait = 45, buffer_size = 1024})')
 		return false
 	end
 	
@@ -105,7 +109,7 @@ function init(c)
 	end
 	
 	if not config.at_wait then
-		config.at_wait = 10000000
+		config.at_wait = 2000000
 	else
 		config.at_wait = config.at_wait * 1000000
 	end
@@ -132,59 +136,46 @@ function init(c)
 	-- Wait a while till the GSM network is configured
 	tmr.delay(0, 3000000)
 	
-	negotiate_baudrate()
+	-- Negotiate the baudrate
+	if (not try_send_cmd(at_comm.at_0, responses.GSM_OK)) then 
+		print('Unable to communicate with GSM Click') 
+		return false;
+	end
 	
 	-- Disable ECHO
-	try_send_cmd(at_comm.at_1)
+	try_send_cmd(at_comm.at_1, responses.GSM_OK)
 	
 	-- Set message type as TXT
-	try_send_cmd(at_comm.at_2)
+	try_send_cmd(at_comm.at_2, responses.GSM_OK)
 	
 	return true
 end
 
--- Negotiate the baudrate
-function negotiate_baudrate()
-	while(true) do
-		send_at_command(at_comm.at_0)
-		tmr.delay(0, 100)
-		line = get_response()
-		if line ~= nil then
-			if (parse_response(line) == 0) then break end
+-- Get response from GSM Click
+function get_response()
+	for i=0, 3*MAX_TRIES do
+		local response = parse_line(uart.read(config.uart_id,'*l',config.at_wait))
+		local rspn_code = parse_response(response)
+		if(#response > 0) then 
+			--print(response)
+			return response, rspn_code
+		else tmr.delay(0,5000)
 		end
-		tmr.delay( 0, 500 )
 	end
-end
-
--- Receive line from uart
-function uart_recv_line()
-	local line = uart.read(config.uart_id,'*l',config.at_wait)
-	return parse_line(line)
+	
+	return '', rspn_code
 end
 
 -- Wait for desired response
 function wait_response(rspn)
-	while (true) do
-		local line = get_response()
-		local r = parse_response(line)
-		if(r == rspn ) then 
-			return true
-		elseif (r == responses.GSM_ERROR or r == responses.CMS_ERROR) then
-			return false
+	for i = 0, MAX_TRIES -1 do
+		local recv_rspn, rspn_code = get_response()
+		if(rspn_code == rspn ) then 
+			return true, recv_rspn, rspn_code
+		elseif (rspn_code == responses.GSM_ERROR or rspn_code == responses.CMS_ERROR) then
+			return false, recv_rspn, rspn_code
 		else
 			tmr.delay(0, 5000)
-		end
-	end
-end
-
--- Get response from GSM Click
-function get_response()
-	while(true) do
-		local line = uart_recv_line()
-		if(line ~= '') then 
-			print('Recv: '..line)
-			return line
-		else tmr.delay(0,5000)
 		end
 	end
 end
@@ -192,29 +183,31 @@ end
 -- Parse received response
 function parse_response(rspn)
 	local ret = -1
-	
 	if (rspn == 'OK') then ret = responses.GSM_OK end
 	if (rspn == '> ') then ret = responses.GSM_Ready_To_Receive_Message end
 	if (rspn == 'ERROR') then ret = responses.GSM_ERROR end
 	if (rspn:find('+CMS ERROR') ~= nil) then ret = responses.CMS_ERROR end
+	if (rspn == '') then ret = responses.NO_RESPONSE end
 	
 	return ret
 end
 
 -- Try send command until desired response is received
-function try_send_cmd(cmd, expected_rspn)
-	if(expected_rspn == nil) then expected_rspn = responses.GSM_OK end
-	while(true) do
-		-- Send command
-		send_at_command(cmd)
-		-- Wait for expected response
-		if(wait_response(expected_rspn)) then break end
+function try_send_cmd(cmd, expected_rspn)	
+	-- Send command
+	send_at_command(cmd)
+	-- Wait for expected response
+	success, rspn, rspn_code = wait_response(expected_rspn)
+	if(success) then 
+		return true, rspn, rspn_code
+	else
+		return false, rspn, rspn_code
 	end
 end
 
 -- Send AT command
 function send_at_command(cmd)
-	print('Sending: '.. parse_line(cmd))
+	--print('Sending: '.. parse_line(cmd))
 	uart.write(config.uart_id,cmd..'\r')
 end
 
@@ -223,32 +216,38 @@ function send_sms(phone_number, message)
 	
 	-- Send phone number and wait for ACK
 	local at_string = at_comm.at_3..phone_number..'"\r'
-	try_send_cmd(at_string, responses.GSM_Ready_To_Receive_Message)
+	try_send_cmd(at_string, responses.GSM_Ready_To_Receive_Message, 50)
 	
 	-- Send text message itself
 	at_string = message..'\026'
-	try_send_cmd(at_string)
+	try_send_cmd(at_string, responses.GSM_OK)
 	
 end
 
--- TODO Check more than 1 sms
 -- Check unread text messages
 function try_get_sms(sms_status)
 	local messages = {}, m, n, s			-- m = message, n = number, s = status
 	if(sms_status == nil) then sms_status = '"ALL"' end
 	
 	send_at_command(at_comm.at_6..sms_status)
-	local response = get_response()
-	while((parse_response(response) ~= responses.GSM_OK) and (parse_response(response) ~= responses.GSM_ERROR) and (parse_response(response) ~= responses.CMS_ERROR)) do
+	tmr.delay(0, 20000)
+	local response, rspn_code = get_response()
+
+	if(rspn_code == responses.GSM_ERROR or rspn_code == responses.CMS_ERROR) then
+		return false, response, rspn_code, nil 
+	end
+	
+	while(parse_response(response) ~= responses.GSM_OK) do
 		s = string.match(response, 'REC%s(%w+)') 	-- First line of response
 		n = string.match(response, '"(+?%d+)"')
 		m = get_response()							-- Second line of response
 		response = get_response()					-- Third line of response
-		if(parse_response(response) == responses.GSM_OK) then 
+		print('SMS: ', s, m, n, response)
+		if(s ~= nil and n ~= nil) then 
 			table.insert(messages, {s, n, m})
 		end
 	end
-	return messages
+	return true, nil, nil, messages
 end
 
 --------------------------------------------------------------------
@@ -263,5 +262,10 @@ end
 -- Finds a pattern within a text
 function find_pattern(text, pattern, start)
 	return string.sub(text, string.find(text, pattern, start))
+end
+
+-- Returns CMS error code from error message
+function get_cms_error_code(error_message)
+	return string.match(error_message, '+CME ERROR\: (%d+)')
 end
 
