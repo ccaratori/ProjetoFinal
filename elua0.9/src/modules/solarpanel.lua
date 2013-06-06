@@ -39,9 +39,15 @@ adc.setsmoothing(right_sensor_id, 4)
 --	Callbacks
 ---------------------------------------
 function system_on_off(m, n, s)
+<<<<<<< HEAD
 	
 	system_on = not system_on
 	
+=======
+
+	system_on = not system_on
+
+>>>>>>> Commit v1.0
 	if(debugdef) then
 		if(system_on) then disp.print('System OFF', 20, 10, 0) disp.print('System ON', 20, 10, 15)
 		else disp.print('System ON', 20, 10, 0) disp.print('System OFF', 20, 10, 15)
@@ -81,7 +87,11 @@ else
 
 	-- Main loop
 	while(true) do
+<<<<<<< HEAD
 	
+=======
+
+>>>>>>> Commit v1.0
 		-- Read messages
 		local success, error_msg, error_code, messages = try_get_sms()
 		if(success) then
@@ -90,6 +100,7 @@ else
 					sts = v[1]
 					num = v[2]
 					msg = v[3]
+<<<<<<< HEAD
 					
 					print('Received: '..msg..' from '..num)
 					cmd = string.match(msg, '(%w+) ')
@@ -100,19 +111,39 @@ else
 		else
 			if(not(error_code == 4	 and get_cms_error_code(error_msg) == '314')) then
 				print('Unkown error: '..error_msg)
+=======
+
+					print('Received: '..msg..' from '..num)
+					cmd = string.match(msg, '(%w+) ?')
+					if(callbacks[cmd] ~= nil) then callbacks[cmd](m, n, s) end
+				end
+				try_send_cmd('AT+CMGD=1,4')
+			end
+		else
+			if(not(error_code == responses.CMS_ERROR and get_cms_error_code(error_msg) == '314')) then
+				print('Unkown error: '..error_msg..get_cms_error_code(error_msg)..' '..error_code)
+>>>>>>> Commit v1.0
 				break
 			end
 		end
 
 		if (system_on) then 
+<<<<<<< HEAD
 			
+=======
+
+>>>>>>> Commit v1.0
 			-- Take samples
 			adc.sample({left_sensor_id, center_sensor_id, right_sensor_id}, 1)
 			tmr.delay(0, 1000)
 			l_sample = math.floor(adc.getsample(left_sensor_id)/left_maxval * 10000)/100
 			c_sample = math.floor(adc.getsample(center_sensor_id)/center_maxval * 10000)/100
 			r_sample = math.floor(adc.getsample(right_sensor_id)/right_maxval * 10000)/100
+<<<<<<< HEAD
 			
+=======
+
+>>>>>>> Commit v1.0
 			-- If debugdef print sensor values on display
 			if(debugdef) then
 				disp.print('Esq: '..tostring(l_p_sample or 0), 10, 30, 0)
@@ -122,6 +153,7 @@ else
 				disp.print('Ctr: '..tostring(c_sample or 0), 10, 40, 15)
 				disp.print('Dir: '..tostring(r_sample or 0), 10, 50, 15)
 			end
+<<<<<<< HEAD
 			
 			
 			l_p_sample = l_sample
@@ -131,6 +163,17 @@ else
 			tmr.delay(0, 200000)
 		end
 		
+=======
+
+
+			l_p_sample = l_sample
+			c_p_sample = c_sample
+			r_p_sample = r_sample
+
+			tmr.delay(0, 200000)
+		end
+
+>>>>>>> Commit v1.0
 		local test = uart.getchar(0,0)
 		if(test  == 's' ) then
 			system_on_off()
@@ -141,9 +184,15 @@ else
 		elseif(test == 'e') then
 			terminate()
 		end
+<<<<<<< HEAD
 		
 		if(terminate_flag) then break end
 		
+=======
+
+		if(terminate_flag) then break end
+
+>>>>>>> Commit v1.0
 		tmr.delay(0,1000)
 	end
 end

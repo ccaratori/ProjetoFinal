@@ -52,6 +52,9 @@ local uart = uart
 -- GSM configuration
 config = nil
 
+-- Max tries for sending AT commands
+MAX_TRIES = 3
+
 -- Set of basic AT commands
 local at_comm = {
 		at_0 = 'AT',					-- Every AT command starts with "AT"
@@ -65,13 +68,17 @@ local at_comm = {
 	}
 
 -- Responses codes
-local responses = {
+responses = {
 		GSM_OK                       = 0,
 		GSM_Ready_To_Receive_Message = 1,
 		GSM_ERROR                    = 2,
 		GSM_UNREAD                   = 3,
+<<<<<<< HEAD
 		CMS_ERROR					 = 4,
 		NO_RESPONSE					 = 5;
+=======
+		CMS_ERROR					 = 4;
+>>>>>>> Commit v1.0
 	}
 	
 -- Possible message status to be retreived
@@ -136,10 +143,17 @@ function init(c)
 	-- Wait a while till the GSM network is configured
 	tmr.delay(0, 3000000)
 	
+<<<<<<< HEAD
 	-- Negotiate the baudrate
 	if (not try_send_cmd(at_comm.at_0, responses.GSM_OK)) then 
 		print('Unable to communicate with GSM Click') 
 		return false;
+=======
+	-- Negotiate baudrate
+	if(not try_send_cmd(at_comm.at_0)) then
+		print('Unable to communicate with GSM Click\nTry checking the wires and restarting the program')
+		return false
+>>>>>>> Commit v1.0
 	end
 	
 	-- Disable ECHO
@@ -153,6 +167,7 @@ end
 
 -- Get response from GSM Click
 function get_response()
+<<<<<<< HEAD
 	for i=0, 3*MAX_TRIES do
 		local response = parse_line(uart.read(config.uart_id,'*l',config.at_wait))
 		local rspn_code = parse_response(response)
@@ -174,10 +189,39 @@ function wait_response(rspn)
 			return true, recv_rspn, rspn_code
 		elseif (rspn_code == responses.GSM_ERROR or rspn_code == responses.CMS_ERROR) then
 			return false, recv_rspn, rspn_code
+=======
+	local rspn, rspn_code = -1
+	for i=0,MAX_TRIES*3 do
+		rspn = parse_line(uart.read(config.uart_id,'*l',config.at_wait))
+		if(rspn ~= '') then 
+			print('Recv: '..rspn)
+			rspn_code = parse_response(rspn)
+			break
+		else tmr.delay(0,2000)
+		end
+	end
+	return rspn, rspn_code
+end
+
+-- Wait for desired response
+function wait_response(expected_rspn)
+	local success = false, rspn, rspn_code
+	for i=0,MAX_TRIES-1 do
+		local rspn, rspn_code = get_response()
+		if(rspn_code == expected_rspn ) then 
+			success = true
+			break
+		elseif (rspn_code == responses.GSM_ERROR or rspn_code == responses.CMS_ERROR) then
+			break
+>>>>>>> Commit v1.0
 		else
 			tmr.delay(0, 5000)
 		end
 	end
+<<<<<<< HEAD
+=======
+	return success, rspn, rspn_code
+>>>>>>> Commit v1.0
 end
 
 -- Parse received response
@@ -193,6 +237,7 @@ function parse_response(rspn)
 end
 
 -- Try send command until desired response is received
+<<<<<<< HEAD
 function try_send_cmd(cmd, expected_rspn)	
 	-- Send command
 	send_at_command(cmd)
@@ -203,6 +248,15 @@ function try_send_cmd(cmd, expected_rspn)
 	else
 		return false, rspn, rspn_code
 	end
+=======
+function try_send_cmd(cmd, expected_rspn)
+	if(expected_rspn == nil) then expected_rspn = responses.GSM_OK end
+
+	-- Send command
+	send_at_command(cmd)
+	-- Wait for expected response
+	return wait_response(expected_rspn)
+>>>>>>> Commit v1.0
 end
 
 -- Send AT command
@@ -227,9 +281,11 @@ end
 -- Check unread text messages
 function try_get_sms(sms_status)
 	local messages = {}, m, n, s			-- m = message, n = number, s = status
+	local rspn, rspn_code
 	if(sms_status == nil) then sms_status = '"ALL"' end
 	
 	send_at_command(at_comm.at_6..sms_status)
+<<<<<<< HEAD
 	tmr.delay(0, 20000)
 	local response, rspn_code = get_response()
 
@@ -248,6 +304,24 @@ function try_get_sms(sms_status)
 		end
 	end
 	return true, nil, nil, messages
+=======
+	rspn, rspn_code = get_response()
+	
+	if((rspn_code == responses.GSM_ERROR) or (rspn_code == responses.CMS_ERROR)) then
+		return false, rspn, rspn_code, messages
+	end
+	
+	while(rspn_code ~= responses.GSM_OK) do
+		s, n = string.match(rspn, '+CMGL: %d+,"REC (%w+)","(+?%d+)"') 	-- First line of response
+		m = get_response()												-- Second line of response
+		rspn, rspn_code = get_response()								-- Third line of response
+		if(s ~= nil or n ~= nil) then 
+			table.insert(messages, {s, n, m})
+		end
+	end
+	
+	return true, rspn, rspn_code, messages
+>>>>>>> Commit v1.0
 end
 
 --------------------------------------------------------------------
@@ -266,6 +340,11 @@ end
 
 -- Returns CMS error code from error message
 function get_cms_error_code(error_message)
+<<<<<<< HEAD
 	return string.match(error_message, '+CME ERROR\: (%d+)')
 end
 
+=======
+	return string.match(error_message, '+CMS ERROR\: (%d+)')
+end
+>>>>>>> Commit v1.0
