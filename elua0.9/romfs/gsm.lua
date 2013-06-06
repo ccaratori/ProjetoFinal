@@ -73,12 +73,7 @@ responses = {
 		GSM_Ready_To_Receive_Message = 1,
 		GSM_ERROR                    = 2,
 		GSM_UNREAD                   = 3,
-<<<<<<< HEAD
-		CMS_ERROR					 = 4,
-		NO_RESPONSE					 = 5;
-=======
 		CMS_ERROR					 = 4;
->>>>>>> Commit v1.0
 	}
 	
 -- Possible message status to be retreived
@@ -87,9 +82,6 @@ sms_status = {
 		READ	= 'REC READ',		-- Only read messages
 		UNREAD	= 'REC UNREAD';		-- Only unread messages
 	}
-	
--- Maximum tries for sending AT command
-MAX_TRIES = 5
 
 -- Initialize gsm board and communication
 function init(c)
@@ -97,17 +89,17 @@ function init(c)
 	config = c
 	
 	if not config.uart_id then
-		print('UART id must be set in init.\nEg.: init({uart_id = 1, rts_pio = pio.PC_5, rst_pio = pio.PC_7, baud_rate 9600, at_wait = 45, buffer_size = 1024})')
+		-- TODO - log missing uart_id
 		return false
 	end
 	
 	if not config.rts_pio then
-		print('RTS must be set in init.\nEg.: init({uart_id = 1, rts_pio = pio.PC_5, rst_pio = pio.PC_7, baud_rate 9600, at_wait = 45, buffer_size = 1024})')
+		-- TODO - log missing rts_pio
 		return false
 	end
 	
 	if not config.rst_pio then
-		print('RST must be set in init.\nEg.: init({uart_id = 1, rts_pio = pio.PC_5, rst_pio = pio.PC_7, baud_rate 9600, at_wait = 45, buffer_size = 1024})')
+		-- TODO - log missing rst_pio
 		return false
 	end
 	
@@ -116,7 +108,7 @@ function init(c)
 	end
 	
 	if not config.at_wait then
-		config.at_wait = 2000000
+		config.at_wait = 10000000
 	else
 		config.at_wait = config.at_wait * 1000000
 	end
@@ -143,53 +135,23 @@ function init(c)
 	-- Wait a while till the GSM network is configured
 	tmr.delay(0, 3000000)
 	
-<<<<<<< HEAD
-	-- Negotiate the baudrate
-	if (not try_send_cmd(at_comm.at_0, responses.GSM_OK)) then 
-		print('Unable to communicate with GSM Click') 
-		return false;
-=======
 	-- Negotiate baudrate
 	if(not try_send_cmd(at_comm.at_0)) then
 		print('Unable to communicate with GSM Click\nTry checking the wires and restarting the program')
 		return false
->>>>>>> Commit v1.0
 	end
 	
 	-- Disable ECHO
-	try_send_cmd(at_comm.at_1, responses.GSM_OK)
+	try_send_cmd(at_comm.at_1)
 	
 	-- Set message type as TXT
-	try_send_cmd(at_comm.at_2, responses.GSM_OK)
+	try_send_cmd(at_comm.at_2)
 	
 	return true
 end
 
 -- Get response from GSM Click
 function get_response()
-<<<<<<< HEAD
-	for i=0, 3*MAX_TRIES do
-		local response = parse_line(uart.read(config.uart_id,'*l',config.at_wait))
-		local rspn_code = parse_response(response)
-		if(#response > 0) then 
-			--print(response)
-			return response, rspn_code
-		else tmr.delay(0,5000)
-		end
-	end
-	
-	return '', rspn_code
-end
-
--- Wait for desired response
-function wait_response(rspn)
-	for i = 0, MAX_TRIES -1 do
-		local recv_rspn, rspn_code = get_response()
-		if(rspn_code == rspn ) then 
-			return true, recv_rspn, rspn_code
-		elseif (rspn_code == responses.GSM_ERROR or rspn_code == responses.CMS_ERROR) then
-			return false, recv_rspn, rspn_code
-=======
 	local rspn, rspn_code = -1
 	for i=0,MAX_TRIES*3 do
 		rspn = parse_line(uart.read(config.uart_id,'*l',config.at_wait))
@@ -213,42 +175,26 @@ function wait_response(expected_rspn)
 			break
 		elseif (rspn_code == responses.GSM_ERROR or rspn_code == responses.CMS_ERROR) then
 			break
->>>>>>> Commit v1.0
 		else
 			tmr.delay(0, 5000)
 		end
 	end
-<<<<<<< HEAD
-=======
 	return success, rspn, rspn_code
->>>>>>> Commit v1.0
 end
 
 -- Parse received response
 function parse_response(rspn)
 	local ret = -1
+	
 	if (rspn == 'OK') then ret = responses.GSM_OK end
 	if (rspn == '> ') then ret = responses.GSM_Ready_To_Receive_Message end
 	if (rspn == 'ERROR') then ret = responses.GSM_ERROR end
 	if (rspn:find('+CMS ERROR') ~= nil) then ret = responses.CMS_ERROR end
-	if (rspn == '') then ret = responses.NO_RESPONSE end
 	
 	return ret
 end
 
 -- Try send command until desired response is received
-<<<<<<< HEAD
-function try_send_cmd(cmd, expected_rspn)	
-	-- Send command
-	send_at_command(cmd)
-	-- Wait for expected response
-	success, rspn, rspn_code = wait_response(expected_rspn)
-	if(success) then 
-		return true, rspn, rspn_code
-	else
-		return false, rspn, rspn_code
-	end
-=======
 function try_send_cmd(cmd, expected_rspn)
 	if(expected_rspn == nil) then expected_rspn = responses.GSM_OK end
 
@@ -256,12 +202,11 @@ function try_send_cmd(cmd, expected_rspn)
 	send_at_command(cmd)
 	-- Wait for expected response
 	return wait_response(expected_rspn)
->>>>>>> Commit v1.0
 end
 
 -- Send AT command
 function send_at_command(cmd)
-	--print('Sending: '.. parse_line(cmd))
+	print('Sending: '.. parse_line(cmd))
 	uart.write(config.uart_id,cmd..'\r')
 end
 
@@ -270,14 +215,15 @@ function send_sms(phone_number, message)
 	
 	-- Send phone number and wait for ACK
 	local at_string = at_comm.at_3..phone_number..'"\r'
-	try_send_cmd(at_string, responses.GSM_Ready_To_Receive_Message, 50)
+	try_send_cmd(at_string, responses.GSM_Ready_To_Receive_Message)
 	
 	-- Send text message itself
 	at_string = message..'\026'
-	try_send_cmd(at_string, responses.GSM_OK)
+	try_send_cmd(at_string)
 	
 end
 
+-- TODO Check more than 1 sms
 -- Check unread text messages
 function try_get_sms(sms_status)
 	local messages = {}, m, n, s			-- m = message, n = number, s = status
@@ -285,26 +231,6 @@ function try_get_sms(sms_status)
 	if(sms_status == nil) then sms_status = '"ALL"' end
 	
 	send_at_command(at_comm.at_6..sms_status)
-<<<<<<< HEAD
-	tmr.delay(0, 20000)
-	local response, rspn_code = get_response()
-
-	if(rspn_code == responses.GSM_ERROR or rspn_code == responses.CMS_ERROR) then
-		return false, response, rspn_code, nil 
-	end
-	
-	while(parse_response(response) ~= responses.GSM_OK) do
-		s = string.match(response, 'REC%s(%w+)') 	-- First line of response
-		n = string.match(response, '"(+?%d+)"')
-		m = get_response()							-- Second line of response
-		response = get_response()					-- Third line of response
-		print('SMS: ', s, m, n, response)
-		if(s ~= nil and n ~= nil) then 
-			table.insert(messages, {s, n, m})
-		end
-	end
-	return true, nil, nil, messages
-=======
 	rspn, rspn_code = get_response()
 	
 	if((rspn_code == responses.GSM_ERROR) or (rspn_code == responses.CMS_ERROR)) then
@@ -321,7 +247,6 @@ function try_get_sms(sms_status)
 	end
 	
 	return true, rspn, rspn_code, messages
->>>>>>> Commit v1.0
 end
 
 --------------------------------------------------------------------
@@ -340,11 +265,5 @@ end
 
 -- Returns CMS error code from error message
 function get_cms_error_code(error_message)
-<<<<<<< HEAD
-	return string.match(error_message, '+CME ERROR\: (%d+)')
-end
-
-=======
 	return string.match(error_message, '+CMS ERROR\: (%d+)')
 end
->>>>>>> Commit v1.0
